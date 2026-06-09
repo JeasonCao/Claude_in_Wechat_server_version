@@ -39,6 +39,20 @@ BACKEND = os.environ.get("CLAUDE_BACKEND", "cli").lower()
 # API 模式下使用的模型，可通过环境变量覆盖
 API_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 
+# ── 系统提示词（人设）─────────────────────────────────────────────
+# 从 system_prompt.txt 加载；/reset 不影响；聊天内 /system 命令可实时修改
+_SYSTEM_PROMPT_FILE = Path(__file__).parent / "system_prompt.txt"
+SYSTEM_PROMPT = ""   # 在 run() 里赋值
+
+
+def _load_system_prompt() -> str:
+    if _SYSTEM_PROMPT_FILE.exists():
+        content = _SYSTEM_PROMPT_FILE.read_text(encoding="utf-8").strip()
+        if content:
+            logger.info("已加载系统提示词 (%d 字)", len(content))
+        return content
+    return ""
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -340,6 +354,8 @@ def _call_via_cli(message: str, user_id: str, image_paths: list[str] | None = No
     ]
     if session_id:
         cmd.extend(["--resume", session_id])
+    if SYSTEM_PROMPT:
+        cmd.extend(["--system-prompt", SYSTEM_PROMPT])
 
     if image_paths:
         paths_str = "\n".join(f"- {p}" for p in image_paths)
@@ -430,11 +446,14 @@ def _call_via_api(message: str, user_id: str, image_paths: list[str] | None = No
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
-        resp = client.messages.create(
+        create_kwargs: dict = dict(
             model=API_MODEL,
             max_tokens=4096,
             messages=messages_snapshot,
         )
+        if SYSTEM_PROMPT:
+            create_kwargs["system"] = SYSTEM_PROMPT
+        resp = client.messages.create(**create_kwargs)
         reply = resp.content[0].text if resp.content else ""
         with _sessions_lock:
             # 只保存纯文字历史，图片数据不持久化
@@ -492,9 +511,12 @@ def _parse_output(stdout: str, user_id: str) -> str:
 
 HELP_TEXT = """\
 可用命令：
-  /reset   — 清除对话历史，开始新会话
-  /status  — 查看 bridge 状态
-  /help    — 显示此帮助
+  /reset          — 清除对话历史，开始新会话
+  /status         — 查看 bridge 状态
+  /system         — 查看当前系统提示词（人设）
+  /system <内容>  — 设置系统提示词，立即生效并持久化
+  /system clear   — 清除系统提示词
+  /help           — 显示此帮助
 其他消息直接发给 Claude。"""
 
 
@@ -541,6 +563,21 @@ def handle_message(client: ILinkClient, msg: dict) -> None:
         client.send(from_user, context_token, HELP_TEXT)
         return
 
+    if cmd == "/system" or text.lower().startswith("/system "):
+        global SYSTEM_PROMPT
+        if cmd == "/system":
+            reply = f"当前系统提示词：\n{SYSTEM_PROMPT}" if SYSTEM_PROMPT else "当前未设置系统提示词。"
+        elif text[8:].strip().lower() == "clear":
+            SYSTEM_PROMPT = ""
+            _SYSTEM_PROMPT_FILE.write_text("", encoding="utf-8")
+            reply = "已清除系统提示词。"
+        else:
+            SYSTEM_PROMPT = text[8:].strip()
+            _SYSTEM_PROMPT_FILE.write_text(SYSTEM_PROMPT, encoding="utf-8")
+            reply = f"已更新系统提示词：\n{SYSTEM_PROMPT}"
+        client.send(from_user, context_token, reply)
+        return
+
     image_paths: list[str] = []
     try:
         for img_info in images:
@@ -573,6 +610,8 @@ def run() -> None:
         print("未找到登录信息，开始扫码登录……\n")
         client.login()
 
+    global SYSTEM_PROMPT
+    SYSTEM_PROMPT = _load_system_prompt()
     _load_sessions()
     _load_histories()
     print(f"\n=== 微信 Claude Bridge 已启动（服务器版，后端：{BACKEND.upper()}）===")

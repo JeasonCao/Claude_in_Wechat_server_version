@@ -100,9 +100,43 @@ journalctl -u wechat-bridge -f
 
 | 命令 | 效果 |
 |------|------|
-| `/reset` | 清除对话历史，开始新会话 |
+| `/reset` | 清除对话历史，开始新会话（不影响人设） |
 | `/status` | 查看当前运行状态和后端模式 |
+| `/system` | 查看当前系统提示词（人设） |
+| `/system <内容>` | 设置系统提示词，立即生效并持久化 |
+| `/system clear` | 清除系统提示词 |
 | `/help` | 显示帮助 |
+
+---
+
+## 设置人设 / 系统提示词
+
+**方法一：直接在微信里发命令（推荐，无需登录服务器）**
+
+```
+/system 你是我的私人助手，名叫小助手。请用中文回复，语气轻松自然，回答尽量简洁。
+```
+
+设定立即生效，自动写入 `system_prompt.txt`，服务重启后依然有效，`/reset` 不会清除。
+
+**方法二：编辑服务器上的文件**
+
+```bash
+nano ~/bridge/system_prompt.txt
+sudo systemctl restart wechat-bridge
+```
+
+---
+
+## 更新服务（无需重新部署）
+
+在服务器上运行：
+
+```bash
+bash ~/bridge/update.sh
+```
+
+脚本会自动 `git pull` 拉取最新代码并重启服务。
 
 ---
 
