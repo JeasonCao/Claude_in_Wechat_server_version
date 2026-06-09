@@ -4,13 +4,21 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVICE_USER="${WECHAT_BRIDGE_USER:-wechat-bridge}"
 SERVICE_DST="/etc/systemd/system/wechat-bridge.service"
 
 if [[ $EUID -ne 0 ]]; then
     echo "[ERROR] 请用 sudo 运行：sudo bash install-systemd.sh"
     exit 1
 fi
+
+# 与 setup.sh 保持一致：sudo 运行时用调用者身份，直接 root 运行时用 wechat-bridge
+if [[ -n "$SUDO_USER" && "$SUDO_USER" != "root" ]]; then
+    SERVICE_USER="$SUDO_USER"
+else
+    SERVICE_USER="${WECHAT_BRIDGE_USER:-wechat-bridge}"
+fi
+
+echo "[INFO] 服务用户：$SERVICE_USER"
 
 if [[ ! -f "$SCRIPT_DIR/.venv/bin/python" ]]; then
     echo "[ERROR] 虚拟环境不存在，请先运行：sudo bash setup.sh"
