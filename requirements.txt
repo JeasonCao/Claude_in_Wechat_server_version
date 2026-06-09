@@ -2,3 +2,5 @@ httpx>=0.27.0
 qrcode>=7.4
 cryptography>=42.0
 Pillow>=10.0
+# API 模式需要（CLAUDE_BACKEND=api）：
+anthropic>=0.40.0

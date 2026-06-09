@@ -1,13 +1,17 @@
 """
 微信 → Claude Code Bridge（服务器版）
 
-把微信私聊消息转发给本机的 Claude Code CLI，把回复发回微信。
-依赖 Claude Pro 订阅，无需额外 API Key。
+把微信私聊消息转发给本机的 Claude Code CLI 或 Anthropic API，把回复发回微信。
 
 用法：
-    python bridge.py            # 首次运行扫码登录
+    python bridge.py            # 首次运行扫码登录（CLI 模式）
     python bridge.py --logout   # 清除登录凭据
     python bridge.py --login    # 强制重新登录
+
+切换到 API 模式（无需 Claude Code CLI）：
+    export CLAUDE_BACKEND=api
+    export ANTHROPIC_API_KEY=sk-ant-...
+    python bridge.py
 """
 
 from __future__ import annotations   # Python 3.8+ 兼容 X | Y 类型注解
@@ -15,6 +19,7 @@ from __future__ import annotations   # Python 3.8+ 兼容 X | Y 类型注解
 import argparse
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -28,6 +33,12 @@ import httpx
 
 from ilink_client import ILinkClient
 
+# ── Backend 选择 ──────────────────────────────────────────────────
+# 默认 "cli"（调用本机 Claude Code）；设为 "api" 则走 Anthropic HTTP API
+BACKEND = os.environ.get("CLAUDE_BACKEND", "cli").lower()
+# API 模式下使用的模型，可通过环境变量覆盖
+API_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -35,7 +46,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 每个微信用户对应一个 Claude Code session_id（持久多轮对话）
+# ── CLI 模式：session_id 持久化 ───────────────────────────────────
 _sessions: dict[str, str] = {}
 _sessions_lock = threading.Lock()
 _SESSIONS_FILE = Path.home() / ".config" / "wechat-bridge" / "sessions.json"
@@ -60,6 +71,34 @@ def _save_sessions() -> None:
         _SESSIONS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
     except Exception as e:
         logger.warning("保存 sessions 失败: %s", e)
+
+
+# ── API 模式：对话历史管理 ─────────────────────────────────────────
+# 格式：[{"role": "user"|"assistant", "content": str | list}, ...]
+_histories: dict[str, list[dict]] = {}
+_HISTORIES_FILE = Path.home() / ".config" / "wechat-bridge" / "histories.json"
+_MAX_HISTORY_TURNS = 20   # 保留最近 N 轮（user+assistant 各算 1 条）
+
+
+def _load_histories() -> None:
+    if _HISTORIES_FILE.exists():
+        try:
+            data = json.loads(_HISTORIES_FILE.read_text())
+            if isinstance(data, dict):
+                _histories.update(data)
+                logger.info("已恢复 %d 个 API 对话历史", len(data))
+        except Exception as e:
+            logger.warning("读取历史失败: %s", e)
+
+
+def _save_histories() -> None:
+    try:
+        _HISTORIES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with _sessions_lock:
+            data = dict(_histories)
+        _HISTORIES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    except Exception as e:
+        logger.warning("保存历史失败: %s", e)
 
 
 # 单线程：服务器单核 + 内存有限，不允许多个 Claude Code 进程并发
@@ -270,13 +309,22 @@ def _download_image(img_info: dict) -> str | None:
         return None
 
 
-# ── Claude Code 调用 ──────────────────────────────────────────────
+# ── Claude 调用（CLI / API 双后端）───────────────────────────────
+
+def call_claude(message: str, user_id: str, image_paths: list[str] | None = None) -> str:
+    """统一入口：根据 CLAUDE_BACKEND 环境变量分发到 CLI 或 API。"""
+    if BACKEND == "api":
+        return _call_via_api(message, user_id, image_paths)
+    return _call_via_cli(message, user_id, image_paths)
+
+
+# ── CLI 后端 ──────────────────────────────────────────────────────
 
 def _find_claude() -> str | None:
     return shutil.which("claude")
 
 
-def call_claude(message: str, user_id: str, image_paths: list[str] | None = None) -> str:
+def _call_via_cli(message: str, user_id: str, image_paths: list[str] | None = None) -> str:
     """调用本机 Claude Code CLI，返回回复文本。"""
     binary = _find_claude()
     if not binary:
@@ -288,7 +336,7 @@ def call_claude(message: str, user_id: str, image_paths: list[str] | None = None
     cmd = [
         binary, "-p",
         "--output-format", "json",
-        "--dangerously-skip-permissions",   # 服务器无人值守，预配置权限后跳过弹窗
+        "--dangerously-skip-permissions",
     ]
     if session_id:
         cmd.extend(["--resume", session_id])
@@ -301,17 +349,13 @@ def call_claude(message: str, user_id: str, image_paths: list[str] | None = None
             f"[用户发来了图片，请使用 Read 工具查看并描述]\n{paths_str}"
         )
 
-    logger.info("调用 Claude (session=%s%s)",
+    logger.info("调用 Claude CLI (session=%s%s)",
                 session_id[:8] if session_id else "new",
                 f", {len(image_paths)}张图片" if image_paths else "")
 
     try:
         result = subprocess.run(
-            cmd,
-            input=message,
-            capture_output=True,
-            text=True,
-            timeout=120,   # 服务器单核，2 分钟上限
+            cmd, input=message, capture_output=True, text=True, timeout=120,
         )
     except subprocess.TimeoutExpired:
         return "[超时：Claude Code 超过 2 分钟未响应]"
@@ -328,8 +372,7 @@ def call_claude(message: str, user_id: str, image_paths: list[str] | None = None
                     "--dangerously-skip-permissions"]
             try:
                 result = subprocess.run(
-                    cmd2, input=message, capture_output=True,
-                    text=True, timeout=120,
+                    cmd2, input=message, capture_output=True, text=True, timeout=120,
                 )
             except subprocess.TimeoutExpired:
                 return "[超时：Claude Code 超过 2 分钟未响应]"
@@ -340,6 +383,72 @@ def call_claude(message: str, user_id: str, image_paths: list[str] | None = None
             return "[Claude Code 出错，请查看日志]"
 
     return _parse_output(result.stdout, user_id)
+
+
+# ── API 后端 ──────────────────────────────────────────────────────
+
+def _call_via_api(message: str, user_id: str, image_paths: list[str] | None = None) -> str:
+    """调用 Anthropic HTTP API，管理本地对话历史，返回回复文本。"""
+    try:
+        import anthropic
+    except ImportError:
+        return "[错误：API 模式需要先安装 anthropic：pip install anthropic]"
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return "[错误：API 模式需要设置 ANTHROPIC_API_KEY 环境变量]"
+
+    # 构造本条消息的 content（文字 + 图片）
+    content: list[dict] = []
+    if image_paths:
+        import base64
+        for path in image_paths:
+            try:
+                img_b64 = base64.b64encode(Path(path).read_bytes()).decode()
+                content.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64},
+                })
+            except Exception as e:
+                logger.warning("读取图片失败（API 模式）: %s", e)
+    if message:
+        content.append({"type": "text", "text": message})
+    if not content:
+        return "[无内容]"
+
+    with _sessions_lock:
+        history = _histories.setdefault(user_id, [])
+        history.append({"role": "user", "content": content})
+        # 超出上限时从头裁剪，始终保持 user/assistant 配对
+        while len(history) > _MAX_HISTORY_TURNS * 2:
+            history.pop(0)
+        messages_snapshot = list(history)
+
+    logger.info("调用 Claude API (历史%d条%s)",
+                len(messages_snapshot),
+                f", {len(image_paths)}张图片" if image_paths else "")
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model=API_MODEL,
+            max_tokens=4096,
+            messages=messages_snapshot,
+        )
+        reply = resp.content[0].text if resp.content else ""
+        with _sessions_lock:
+            # 只保存纯文字历史，图片数据不持久化
+            _histories[user_id][-1]["content"] = message or "[图片]"
+            _histories[user_id].append({"role": "assistant", "content": reply})
+        _save_histories()
+        return reply
+    except Exception as e:
+        # 回滚刚添加的 user 消息，避免历史污染
+        with _sessions_lock:
+            if _histories.get(user_id):
+                _histories[user_id].pop()
+        logger.error("Anthropic API 调用失败: %s", e)
+        return f"[API 错误: {e}]"
 
 
 def _parse_output(stdout: str, user_id: str) -> str:
@@ -410,18 +519,22 @@ def handle_message(client: ILinkClient, msg: dict) -> None:
     if cmd == "/reset":
         with _sessions_lock:
             _sessions.pop(from_user, None)
+            _histories.pop(from_user, None)
         _save_sessions()
+        _save_histories()
         client.send(from_user, context_token, "已清除对话历史，开始新会话。")
         return
 
     if cmd == "/status":
         with _sessions_lock:
-            sid = (_sessions.get(from_user, "")[:8] or "无")
-        claude_ok = "✅ 已安装" if _find_claude() else "❌ 未找到"
-        client.send(
-            from_user, context_token,
-            f"Bridge 状态：运行中\nClaude Code：{claude_ok}\n当前 Session：{sid}",
-        )
+            sid   = (_sessions.get(from_user,  "")[:8] or "无")
+            turns = len(_histories.get(from_user, [])) // 2
+        if BACKEND == "api":
+            status = f"Bridge 状态：运行中\n后端：API（{API_MODEL}）\n历史轮数：{turns}"
+        else:
+            claude_ok = "✅ 已安装" if _find_claude() else "❌ 未找到"
+            status = f"Bridge 状态：运行中\n后端：CLI\nClaude Code：{claude_ok}\n当前 Session：{sid}"
+        client.send(from_user, context_token, status)
         return
 
     if cmd == "/help":
@@ -461,7 +574,8 @@ def run() -> None:
         client.login()
 
     _load_sessions()
-    print("\n=== 微信 Claude Bridge 已启动（服务器版）===")
+    _load_histories()
+    print(f"\n=== 微信 Claude Bridge 已启动（服务器版，后端：{BACKEND.upper()}）===")
     print("监听私聊消息中……（Ctrl+C 停止）\n")
 
     err_count = 0
