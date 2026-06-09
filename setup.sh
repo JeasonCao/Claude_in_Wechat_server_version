@@ -6,25 +6,30 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
-# ── 1. 找到 Python 3.10+ ────────────────────────────────────────
+# ── 1. 找到 Python 3.8+（代码用 from __future__ import annotations，3.8 即可）──
 echo "[INFO] 检查 Python 版本..."
 PYTHON=""
-for py in python3.12 python3.11 python3.10; do
+for py in python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
     if command -v "$py" &>/dev/null; then
-        PYTHON="$py"
-        break
+        # 验证版本 >= 3.8
+        if "$py" -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)" 2>/dev/null; then
+            PYTHON="$py"
+            break
+        fi
     fi
 done
 
-# Ubuntu 20.04 默认 Python 3.8，需要 deadsnakes PPA
 if [[ -z "$PYTHON" ]]; then
-    echo "[INFO] 未找到 Python 3.10+，通过 deadsnakes PPA 安装..."
-    sudo apt-get update -q
-    sudo apt-get install -y software-properties-common
-    sudo add-apt-repository -y ppa:deadsnakes/ppa
-    sudo apt-get update -q
-    sudo apt-get install -y python3.10 python3.10-venv
-    PYTHON=python3.10
+    echo "[ERROR] 未找到 Python 3.8+，请手动安装："
+    echo "        apt-get install -y python3.8 python3.8-venv"
+    exit 1
+fi
+
+# 确保对应版本的 venv 模块可用
+PY_VER=$("$PYTHON" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+if ! "$PYTHON" -m venv --help &>/dev/null 2>&1; then
+    echo "[INFO] 安装 python${PY_VER}-venv..."
+    apt-get install -y "python${PY_VER}-venv" || true
 fi
 
 echo "[INFO] 使用: $($PYTHON --version)"
