@@ -511,12 +511,12 @@ def _parse_output(stdout: str, user_id: str) -> str:
 
 HELP_TEXT = """\
 可用命令：
-  /reset          — 清除对话历史，开始新会话
-  /status         — 查看 bridge 状态
-  /system         — 查看当前系统提示词（人设）
-  /system <内容>  — 设置系统提示词，立即生效并持久化
-  /system clear   — 清除系统提示词
-  /help           — 显示此帮助
+  /reset           — 清除对话历史，开始新会话
+  /status          — 查看 bridge 状态
+  /persona         — 查看当前人设
+  /persona <内容>  — 设置人设，立即生效并持久化
+  /persona clear   — 清除人设
+  /help            — 显示此帮助
 其他消息直接发给 Claude。"""
 
 
@@ -563,18 +563,18 @@ def handle_message(client: ILinkClient, msg: dict) -> None:
         client.send(from_user, context_token, HELP_TEXT)
         return
 
-    if cmd == "/system" or text.lower().startswith("/system "):
+    if cmd == "/persona" or text.lower().startswith("/persona "):
         global SYSTEM_PROMPT
-        if cmd == "/system":
-            reply = f"当前系统提示词：\n{SYSTEM_PROMPT}" if SYSTEM_PROMPT else "当前未设置系统提示词。"
-        elif text[8:].strip().lower() == "clear":
+        if cmd == "/persona":
+            reply = f"当前人设：\n{SYSTEM_PROMPT}" if SYSTEM_PROMPT else "当前未设置人设。"
+        elif text[9:].strip().lower() == "clear":
             SYSTEM_PROMPT = ""
             _SYSTEM_PROMPT_FILE.write_text("", encoding="utf-8")
-            reply = "已清除系统提示词。"
+            reply = "已清除人设。"
         else:
-            SYSTEM_PROMPT = text[8:].strip()
+            SYSTEM_PROMPT = text[9:].strip()
             _SYSTEM_PROMPT_FILE.write_text(SYSTEM_PROMPT, encoding="utf-8")
-            reply = f"已更新系统提示词：\n{SYSTEM_PROMPT}"
+            reply = f"已更新人设：\n{SYSTEM_PROMPT}"
         client.send(from_user, context_token, reply)
         return
 
