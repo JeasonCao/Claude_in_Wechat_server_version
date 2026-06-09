@@ -75,8 +75,11 @@ else
     useradd -m -s /bin/bash "$SERVICE_USER"
 fi
 
-# ── 5. 设置项目目录权限 ───────────────────────────────────────────
+# ── 5. 设置项目目录权限，在服务用户 home 下建软链接方便访问 ────────
 chown -R "$SERVICE_USER:$SERVICE_USER" "$SCRIPT_DIR"
+# ~/bridge 软链接：su - wechat-bridge 后直接 cd ~/bridge 即可，无需记路径
+ln -sfn "$SCRIPT_DIR" "/home/$SERVICE_USER/bridge"
+chown -h "$SERVICE_USER:$SERVICE_USER" "/home/$SERVICE_USER/bridge"
 
 # ── 6. 以服务用户身份创建 venv、安装依赖 ──────────────────────────
 echo "[INFO] 创建虚拟环境并安装依赖（以 $SERVICE_USER 身份）..."
@@ -123,6 +126,5 @@ echo ""
 echo "  下一步：切换到服务用户，完成登录"
 echo ""
 echo "    su - $SERVICE_USER"
-echo "    cd $SCRIPT_DIR"
-echo "    bash first-run.sh"
+echo "    bash ~/bridge/first-run.sh"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

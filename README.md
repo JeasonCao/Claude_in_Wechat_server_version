@@ -25,9 +25,11 @@
 
 ```bash
 apt-get update && apt-get install -y git
-git clone https://github.com/JeasonCao/Claude_in_Wechat_server_version.git
-cd Claude_in_Wechat_server_version
+git clone https://github.com/JeasonCao/Claude_in_Wechat_server_version.git /opt/wechat-bridge
+cd /opt/wechat-bridge
 ```
+
+> 克隆到 `/opt/` 而非 root 的 home 目录，后续非 root 用户也能正常访问。
 
 ### 第二步：安装系统依赖
 
@@ -45,17 +47,16 @@ sudo bash setup.sh
 - 安装 Python 依赖到虚拟环境
 - 配置 Claude Code 权限文件
 
-完成后按照提示切换用户：
+完成后按提示切换到服务用户（setup.sh 已在该用户 home 下建好 `~/bridge` 软链接）：
 
 ```bash
 su - wechat-bridge
-cd /root/Claude_in_Wechat_server_version   # 或你的实际克隆路径
 ```
 
 ### 第三步：完成登录
 
 ```bash
-bash first-run.sh
+bash ~/bridge/first-run.sh
 ```
 
 这一步会引导你完成两个登录：
@@ -142,7 +143,7 @@ sudo systemctl stop wechat-bridge
 
 # 微信 token 过期，重新登录
 sudo systemctl stop wechat-bridge
-sudo -u wechat-bridge bash first-run.sh   # 只需执行第二步（微信扫码）
+sudo -u wechat-bridge bash ~/bridge/first-run.sh   # 只需执行第二步（微信扫码）
 sudo systemctl start wechat-bridge
 ```
 
