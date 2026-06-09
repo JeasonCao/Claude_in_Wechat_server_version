@@ -51,9 +51,9 @@ sudo bash setup.sh
 - 检查 Python 3.8+，不足时安装
 - 检查 Node.js 20+，不足时从 NodeSource 安装
 - 安装 Claude Code CLI（`npm install -g @anthropic-ai/claude-code`）
-- 创建专用服务账号 `wechat-bridge`（Claude Code 不允许在 root 下运行）
 - 安装 Python 依赖到虚拟环境
 - 配置 Claude Code 权限文件
+- **如果直接以 root 运行**：额外创建专用服务账号 `wechat-bridge`
 
 完成后按脚本末尾的提示操作：
 
