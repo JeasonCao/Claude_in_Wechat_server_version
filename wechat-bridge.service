@@ -5,7 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# install-systemd.sh 会自动替换下面两行的路径
+# install-systemd.sh 会自动替换 PLACEHOLDER_DIR 和 PLACEHOLDER_USER
+User=PLACEHOLDER_USER
+Group=PLACEHOLDER_USER
 WorkingDirectory=PLACEHOLDER_DIR
 ExecStart=PLACEHOLDER_DIR/.venv/bin/python PLACEHOLDER_DIR/bridge.py
 
@@ -15,7 +17,7 @@ Environment=NODE_OPTIONS=--max-old-space-size=384
 # 降低优先级，保护 Caddy / V2Ray 等核心服务
 Nice=10
 
-# 崩溃后自动重启，最多等 10 秒
+# 崩溃后自动重启
 Restart=always
 RestartSec=10
 

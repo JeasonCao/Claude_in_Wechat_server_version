@@ -6,8 +6,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_PYTHON="$SCRIPT_DIR/.venv/bin/python"
 
+# Claude Code 禁止以 root 身份使用 --dangerously-skip-permissions
+if [[ $EUID -eq 0 ]]; then
+    echo "[ERROR] 请勿以 root 运行 bridge！Claude Code CLI 会拒绝执行。"
+    echo "        请切换到服务用户运行，例如："
+    echo "        sudo -u wechat-bridge bash start.sh"
+    exit 1
+fi
+
 if [[ ! -x "$VENV_PYTHON" ]]; then
-    echo "[ERROR] 虚拟环境不存在，请先运行：bash setup.sh"
+    echo "[ERROR] 虚拟环境不存在，请先运行：sudo bash setup.sh"
     exit 1
 fi
 
