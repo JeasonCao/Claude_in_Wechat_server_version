@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+
+# 运行时产生的凭据和状态（不能提交）
+~/.config/wechat-bridge/
+*.token
+*.key
+
+# 临时图片
+/tmp/wechat_img_*
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
