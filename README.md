@@ -33,7 +33,7 @@
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
-git clone https://github.com/JeasonCao/Claude_in_Wechat_server_version.git /opt/wechat-bridge
+sudo git clone https://github.com/JeasonCao/Claude_in_Wechat_server_version.git /opt/wechat-bridge
 cd /opt/wechat-bridge
 ```
 
