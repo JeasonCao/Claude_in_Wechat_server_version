@@ -23,7 +23,7 @@ if [[ -z "$PYTHON" ]]; then
     sudo apt-get install -y software-properties-common
     sudo add-apt-repository -y ppa:deadsnakes/ppa
     sudo apt-get update -q
-    sudo apt-get install -y python3.10 python3.10-venv python3.10-distutils
+    sudo apt-get install -y python3.10 python3.10-venv
     PYTHON=python3.10
 fi
 
