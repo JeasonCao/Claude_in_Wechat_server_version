@@ -9,6 +9,14 @@
 
 ---
 
+> **操作账号说明**：请以**普通用户（有 sudo 权限）**进行操作，不要全程使用 root。
+> 如果你的服务器默认登录的是 root，建议先创建一个普通用户：
+> ```bash
+> useradd -m -s /bin/bash yourname && passwd yourname
+> usermod -aG sudo yourname
+> su - yourname
+> ```
+
 ## 准备什么
 
 | 项目 | 说明 |
@@ -24,12 +32,12 @@
 ### 第一步：SSH 登录服务器，克隆代码
 
 ```bash
-apt-get update && apt-get install -y git
+sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/JeasonCao/Claude_in_Wechat_server_version.git /opt/wechat-bridge
 cd /opt/wechat-bridge
 ```
 
-> 克隆到 `/opt/` 而非 root 的 home 目录，后续非 root 用户也能正常访问。
+> 克隆到 `/opt/`，所有用户均可访问，不依赖任何人的 home 目录。
 
 ### 第二步：安装系统依赖
 
