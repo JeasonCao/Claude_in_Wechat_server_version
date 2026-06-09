@@ -74,16 +74,12 @@ bash ~/bridge/first-run.sh
 1. **Claude Code 认证**：终端会显示一个链接，用手机或电脑浏览器打开完成授权
 2. **微信扫码**：终端显示二维码，用微信扫描，扫完自动保存登录状态
 
-登录完成后，按提示退回 root：
-
-```bash
-exit
-```
-
 ### 第四步：安装系统服务
 
+登录完成后，**保持在当前用户下**直接运行（不要 exit 回 root，否则 sudo 无法识别服务用户）：
+
 ```bash
-sudo bash install-systemd.sh
+sudo bash ~/bridge/install-systemd.sh
 ```
 
 完成后服务在后台自动运行，开机自启，崩溃自动重启。
