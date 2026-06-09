@@ -12,9 +12,9 @@
 > **操作账号说明**：请以**普通用户（有 sudo 权限）**进行操作，不要全程使用 root。
 > 如果你的服务器默认登录的是 root，建议先创建一个普通用户：
 > ```bash
-> useradd -m -s /bin/bash [你的用户名] && passwd [你的用户名]
-> usermod -aG sudo [你的用户名]
-> su - [你的用户名]
+> useradd -m -s /bin/bash 你的用户名 && passwd 你的用户名
+> usermod -aG sudo 你的用户名
+> su - 你的用户名
 > ```
 
 ## 准备什么
