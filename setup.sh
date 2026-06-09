@@ -4,11 +4,23 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVICE_USER="${WECHAT_BRIDGE_USER:-wechat-bridge}"
 
 if [[ $EUID -ne 0 ]]; then
-    echo "[ERROR] 请用 root 或 sudo 运行：sudo bash setup.sh"
+    echo "[ERROR] 请用 sudo 运行：sudo bash setup.sh"
     exit 1
+fi
+
+# 判断服务用户：
+#   sudo bash setup.sh  → SUDO_USER 有值 → 用当前登录用户，不建新账号
+#   直接以 root 运行    → SUDO_USER 为空 → 需要建专用 wechat-bridge 账号
+if [[ -n "$SUDO_USER" && "$SUDO_USER" != "root" ]]; then
+    SERVICE_USER="$SUDO_USER"
+    CREATE_USER=false
+    echo "[INFO] 检测到 sudo 用户：$SERVICE_USER，服务将以该用户身份运行"
+else
+    SERVICE_USER="${WECHAT_BRIDGE_USER:-wechat-bridge}"
+    CREATE_USER=true
+    echo "[INFO] 以 root 直接运行，将创建专用服务账号：$SERVICE_USER"
 fi
 
 # ── 1. Python 3.8+（优先用已有的高版本）──────────────────────────
@@ -66,13 +78,14 @@ else
     echo "[INFO] Claude Code CLI 安装完成"
 fi
 
-# ── 4. 创建服务专用用户 ───────────────────────────────────────────
-# Claude Code 禁止 root 使用 --dangerously-skip-permissions
-if id "$SERVICE_USER" &>/dev/null; then
-    echo "[INFO] 用户 '$SERVICE_USER' 已存在，跳过创建。"
-else
-    echo "[INFO] 创建服务用户：$SERVICE_USER"
-    useradd -m -s /bin/bash "$SERVICE_USER"
+# ── 4. 创建服务专用用户（仅直接以 root 运行时需要）──────────────
+if [[ "$CREATE_USER" == true ]]; then
+    if id "$SERVICE_USER" &>/dev/null; then
+        echo "[INFO] 用户 '$SERVICE_USER' 已存在，跳过创建。"
+    else
+        echo "[INFO] 创建服务用户：$SERVICE_USER"
+        useradd -m -s /bin/bash "$SERVICE_USER"
+    fi
 fi
 
 # ── 5. 设置项目目录权限，在服务用户 home 下建软链接方便访问 ────────
@@ -123,8 +136,14 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✓ 系统依赖安装完成！"
 echo ""
-echo "  下一步：切换到服务用户，完成登录"
-echo ""
-echo "    su - $SERVICE_USER"
-echo "    bash ~/bridge/first-run.sh"
+if [[ "$CREATE_USER" == true ]]; then
+    echo "  下一步：切换到服务用户，完成登录"
+    echo ""
+    echo "    su - $SERVICE_USER"
+    echo "    bash ~/bridge/first-run.sh"
+else
+    echo "  下一步：直接完成登录（无需切换用户）"
+    echo ""
+    echo "    bash ~/bridge/first-run.sh"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

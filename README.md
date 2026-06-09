@@ -55,11 +55,13 @@ sudo bash setup.sh
 - 安装 Python 依赖到虚拟环境
 - 配置 Claude Code 权限文件
 
-完成后按提示切换到服务用户（setup.sh 已在该用户 home 下建好 `~/bridge` 软链接）：
+完成后按脚本末尾的提示操作：
 
-```bash
-su - wechat-bridge
-```
+- **普通用户（`sudo bash setup.sh`）**：无需切换用户，直接运行：
+  ```bash
+  bash ~/bridge/first-run.sh
+  ```
+- **直接以 root 运行**：脚本会创建 `wechat-bridge` 账号，提示你 `su - wechat-bridge` 后再运行 `bash ~/bridge/first-run.sh`
 
 ### 第三步：完成登录
 
